@@ -1,0 +1,205 @@
+---
+title: "Capstone - Backorders Impact"
+author: "Ken Muckey"
+date: "1/30/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Capstone
+Overview: Comparing data from 2019 to 2021 to determine gernalized impact of back orders in projects at my workplace.
+
+```{r packages}
+install.packages("readxl")
+install.packages("tidyverse")
+install.packages("ggplot2")
+install.packages("dplyr")
+install.packages("janitor")
+
+library(readxl)
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(janitor)
+```
+## Import
+
+Let's import the raw data from XLSX files...
+
+```{r}
+# xlsx files
+data_2018 <- read_excel("2018datamgm.xlsx")
+data_2021a <-  read_excel("2021datasl.xlsx")
+data_2021b <-  read_excel("2021datacosj.xlsx")
+data_2022 <-  read_excel("2022datavvs.xlsx")
+```
+
+Summaries of each:
+
+```{r}
+head(data_2018)
+```
+
+
+```{r}
+head(data_2021b)
+
+```
+
+Create new dataframes with selected columns and filtered data:
+* Order Date
+* Install Date
+* Model
+
+```{r}
+
+orders_2018 <- data_2018[c('Order Date','Completed Install Date', 'Toshiba Replacement Model')]
+orders_2022 <- data_2022[c('Order Date','Completed Install Date', 'Toshiba Replacement Model')]
+```
+
+Create new dataframes and update non-standard columns for one input source.
+
+```{r}
+orders_2021a <- data_2021a[c('Order Date','Completed Install Date', 'Toshiba Replacement Model')]
+orders_2021b <- data_2021b[c('Order Date','Completed Equipment Install Date', 'Replacement Model' )]
+colnames(orders_2021b)[2]<-'Completed Install Date'
+colnames(orders_2021b)[3]<-'Toshiba Replacement Model'
+
+
+```
+
+Clean all column names and adjust one non-standard data source.
+
+```{r}
+orders_2018 <- clean_names(orders_2018)
+orders_2021a <- clean_names(orders_2021a)
+orders_2021b <- clean_names(orders_2021b)
+orders_2022 <- clean_names(orders_2022)
+
+orders_2021b$toshiba_replacement_model <- gsub("e-STUDIO","",orders_2021b$toshiba_replacement_model)
+head(orders_2021b)
+
+```
+
+
+The next few sections are filtering dataframes with some unique data conversions per inputs.
+
+```{r filtered_orders_2018}
+
+filtered_orders_2018 <- filter(orders_2018, order_date != "N/A")
+
+filtered_orders_2018$order_date <- excel_numeric_to_date(as.numeric(as.character(filtered_orders_2018$order_date)), date_system = "modern") 
+
+filtered_orders_2018$completed_install_date <- excel_numeric_to_date(as.numeric(as.character(filtered_orders_2018$completed_install_date)), date_system = "modern") 
+
+head(filtered_orders_2018)
+```
+
+
+```{r filtered_orders_2021a}
+
+filtered_orders_2021a <- filter(orders_2021a, order_date != "N/A")
+
+filtered_orders_2021a$order_date <- excel_numeric_to_date(as.numeric(as.character(filtered_orders_2021a$order_date)), date_system = "modern") 
+
+filtered_orders_2021a$completed_install_date <- excel_numeric_to_date(as.numeric(as.character(filtered_orders_2021a$completed_install_date)), date_system = "modern") 
+
+
+head(filtered_orders_2021a)
+
+```
+
+```{r filtered_orders_2021b}
+
+filtered_orders_2021b <- filter(orders_2021b, order_date != "N/A")
+
+filtered_orders_2021b$order_date <- excel_numeric_to_date(as.numeric(as.character(filtered_orders_2021b$order_date)), date_system = "modern") 
+
+filtered_orders_2021b$completed_install_date <- as.Date(filtered_orders_2021b$completed_install_date)
+
+
+head(filtered_orders_2021b)
+
+```
+
+
+```{r filtered_orders_2022}
+
+filtered_orders_2022 <- filter(orders_2022, !is.na(order_date))
+
+
+filtered_orders_2022$order_date <-as.Date(filtered_orders_2022$order_date)
+
+filtered_orders_2022$completed_install_date <- excel_numeric_to_date(as.numeric(as.character(filtered_orders_2022$completed_install_date)), date_system = "modern") 
+
+head(filtered_orders_2022)
+
+```
+
+
+
+Add delta and man to each dataframe for DA later.
+
+
+```{r}
+filtered_orders_2018 <-
+  mutate(filtered_orders_2018, delta =  completed_install_date - order_date, mean_delta = mean(delta, na.rm=TRUE))
+head (filtered_orders_2018)
+```
+```{r}
+
+filtered_orders_2021a <-
+  mutate(filtered_orders_2021a, delta =  completed_install_date - order_date, mean_delta = mean(delta, na.rm=TRUE))
+
+filtered_orders_2021b <-
+  mutate(filtered_orders_2021b, delta =  completed_install_date - order_date, mean_delta = mean(delta, na.rm=TRUE))
+
+filtered_orders_2022 <-
+  mutate(filtered_orders_2022, delta =  completed_install_date - order_date, mean_delta = mean(delta, na.rm=TRUE))
+
+head (filtered_orders_2021b)
+
+
+```
+
+Plot: Display order-to-install number of days per each installation among all data frames.  Colors used to seperate the years.  
+
+```{r}
+ggplot() +
+  geom_point(data= filtered_orders_2018, aes(x=toshiba_replacement_model, y=delta, color='2018')) +
+  geom_point(data= filtered_orders_2021a, aes(x=toshiba_replacement_model, y=delta, color='2021a')) +
+  geom_point(data= filtered_orders_2021b, aes(x=toshiba_replacement_model, y=delta, color='2021b')) +
+  geom_point(data= filtered_orders_2022, aes(x=toshiba_replacement_model, y=delta, color='2022')) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+```
+```{r}
+# ggplot() +
+#   geom_bar(data= filtered_orders_2018, aes(x=toshiba_replacement_model, y=delta)) 
+
+delta_summary <- data.frame('by_year' = c('2018','2021a','2021b','2022'),
+                            'delta_mean' = c(filtered_orders_2018$mean_delta[1], ... = filtered_orders_2021a$mean_delta[1], filtered_orders_2021b$mean_delta[1], filtered_orders_2022$mean_delta[1])
+                            )
+
+ggplot(data=delta_summary, aes(x=by_year, y=delta_mean, fill=by_year)) +
+  geom_bar(stat="identity")
+
+#ggplot(data=filtered_orders_2018, aes(x=toshiba_replacement_model, y=delta, fill=toshiba_replacement_model)) +
+#  geom_bar(stat="identity")
+
+#ggplot(data=filtered_orders_2018, aes(x=toshiba_replacement_model, y=delta, fill=toshiba_replacement_model)) +
+#  geom_bar(stat="identity")
+
+
+# p <- ggplot(data=df2, aes(x=dose, y=len, fill=supp)) +
+# geom_bar(stat="identity", color="black", position=position_dodge())+
+#   theme_minimal()
+# # Use custom colors
+# p + scale_fill_manual(values=c('#999999','#E69F00'))
+# # Use brewer color palettes
+# p + scale_fill_brewer(palette="Blues")
+
+```
